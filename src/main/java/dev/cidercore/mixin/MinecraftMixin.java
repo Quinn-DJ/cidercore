@@ -3,6 +3,7 @@ package dev.cidercore.mixin;
 import dev.cidercore.Benchmark;
 import dev.cidercore.api.CidercoreApi;
 import dev.cidercore.backend.FramePacer;
+import dev.cidercore.backend.CidercoreModules;
 import dev.cidercore.backend.HitchTrace;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
@@ -29,6 +30,7 @@ public class MinecraftMixin {
 		FramePacer.worldTick(minecraft.level != null, minecraft.gui.screen() == null);
 		CidercoreApi.pipelineReload().tick();
 		CidercoreApi.settings().tick(minecraft);
+		CidercoreModules.tick();
 		if (HitchTrace.ENABLED) {
 			HitchTrace.tickStart(minecraft.level != null, minecraft.gui.screen() == null);
 			if (!Benchmark.autoMoves()) {
@@ -42,6 +44,11 @@ public class MinecraftMixin {
 		if (HitchTrace.ENABLED) {
 			HitchTrace.tickEnd();
 		}
+	}
+
+	@Inject(method = "stop", at = @At("HEAD"))
+	private void cidercore$shutdownModules(final CallbackInfo ci) {
+		CidercoreModules.shutdown();
 	}
 
 	@Inject(method = "runTick", at = @At("HEAD"))

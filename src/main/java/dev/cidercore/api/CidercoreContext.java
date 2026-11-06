@@ -12,4 +12,14 @@ public interface CidercoreContext {
 
 	/** Logs through the core's logger, prefixed with the caller's module id. */
 	void log(String message);
+
+	/** The settings hub (module pages, key binds, config files). */
+	default Settings settings() {
+		return CidercoreApi.settings();
+	}
+
+	/** The core-owned pipeline reload machinery. */
+	default PipelineReload pipelineReload() {
+		return CidercoreApi.pipelineReload();
+	}
 }
