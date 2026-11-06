@@ -10,6 +10,7 @@
   "entrypoints": {
     "client": ["dev.cidercore.CidercoreClient"]
   },
+  "mixins": ["cidercore.mixins.json"],
   "depends": {
     "fabricloader": ">=0.19.0",
     "minecraft": "26.3",
