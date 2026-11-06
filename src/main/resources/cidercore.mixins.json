@@ -10,7 +10,10 @@
     "BackupConfirmScreenAccessor",
     "SDLEventHandlerMixin",
     "MinecraftServerMixin",
-    "WindowMixin"
+    "WindowMixin",
+    "MinecraftMixin",
+    "OptionsMixin",
+    "VideoSettingsScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1
