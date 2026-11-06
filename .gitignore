@@ -1,0 +1,16 @@
+# Gradle (project-local caches; the user-level cache is ~/.gradle)
+.gradle/
+build/
+out/
+
+# Fabric dev workspace
+run/
+
+# macOS
+.DS_Store
+
+# Java
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr

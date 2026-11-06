@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "cidercore",
+  "version": "${version}",
+  "name": "Cidercore",
+  "description": "Shared core for the Cider mod family: Metal backend, renderpearl integration, module API and lifecycle.",
+  "authors": ["Richard Qi"],
+  "license": "Apache-2.0",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.cidercore.CidercoreClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "minecraft": "26.3",
+    "java": ">=25"
+  },
+  "breaks": {
+    "sodium": "*"
+  }
+}

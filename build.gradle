@@ -1,0 +1,39 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+}
+
+base { archivesName = 'cidercore' }
+
+dependencies {
+	// MC 26.3 is unobfuscated: non-remapping Loom, so there is no `mappings` dependency and
+	// no `mod*` configurations. See docs/recon/build-mechanics.md §2.
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+}
+
+tasks.withType(JavaCompile).configureEach { it.options.release = 25 }
+
+java {
+	toolchain { languageVersion = JavaLanguageVersion.of(25) }
+	withSourcesJar()
+}
+
+processResources {
+	def version = project.version
+	inputs.property 'version', version
+	filesMatching('fabric.mod.json') { expand 'version': version }
+	// Apache-2.0: the licence and the notice travel with the jar.
+	from(file('LICENSE')) { into 'META-INF' }
+	from(file('NOTICE')) { into 'META-INF' }
+}
+
+// Standalone workflow (plan §3.5): `./gradlew publishToMavenLocal`, then ciderlight /
+// cidervista can be built from their own folders against dev.cidercore:cidercore:<version>.
+publishing {
+	publications {
+		create('mavenJava', MavenPublication) {
+			from components.java
+		}
+	}
+}
