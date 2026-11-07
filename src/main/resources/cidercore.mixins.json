@@ -1,21 +1,22 @@
 {
-  "required": true,
-  "package": "dev.cidercore.mixin",
-  "compatibilityLevel": "JAVA_25",
-  "client": [
-    "PreferredGraphicsApiMixin",
-    "GameRendererMixin",
-    "RenderTargetAccessor",
-    "RenderPipelinesMixin",
-    "BackupConfirmScreenAccessor",
-    "SDLEventHandlerMixin",
-    "MinecraftServerMixin",
-    "WindowMixin",
-    "MinecraftMixin",
-    "OptionsMixin",
-    "VideoSettingsScreenMixin"
-  ],
-  "injectors": {
-    "defaultRequire": 1
-  }
+	"required": true,
+	"package": "dev.cidercore.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"PreferredGraphicsApiMixin",
+		"GameRendererMixin",
+		"RenderTargetAccessor",
+		"RenderPipelinesMixin",
+		"BackupConfirmScreenAccessor",
+		"SDLEventHandlerMixin",
+		"MinecraftServerMixin",
+		"WindowMixin",
+		"MinecraftMixin",
+		"OptionsMixin",
+		"VideoSettingsScreenMixin",
+		"FogRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
 }
