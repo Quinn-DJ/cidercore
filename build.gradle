@@ -13,6 +13,24 @@ dependencies {
 	// no `mod*` configurations. See docs/recon/build-mechanics.md §2.
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	// Headless unit tests for the API v2 registries (same BOM as cidervista). No other test deps.
+	testImplementation platform('org.junit:junit-bom:5.11.4')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+repositories {
+	// Only JUnit (and its transitive deps) come from here; Minecraft/Loader are resolved by Loom.
+	mavenCentral()
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+	// Minecraft's logging config writes logs/ relative to the JVM working directory; keep test artifacts under build/.
+	def workDir = layout.buildDirectory.dir('test-work')
+	workingDir = workDir
+	doFirst { workDir.get().asFile.mkdirs() }
 }
 
 tasks.withType(JavaCompile).configureEach { it.options.release = 25 }
