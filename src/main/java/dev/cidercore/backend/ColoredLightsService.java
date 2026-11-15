@@ -37,13 +37,13 @@ import org.lwjgl.system.MemoryUtil;
  * 3D texture sampled by Ciderlight. Filters, held sources and dynamic entities are added in later milestones.</p>
  */
 public final class ColoredLightsService implements ColoredLights {
-	// 64x32x64 low-quality volume; high/ultra will resize this when the quality setting lands.
-	private static final int SIZE_X = 64;
-	private static final int SIZE_Y = 32;
-	private static final int SIZE_Z = 64;
-	private static final int HALF_X = SIZE_X / 2;
-	private static final int HALF_Y = SIZE_Y / 2;
-	private static final int HALF_Z = SIZE_Z / 2;
+	// Low quality by default; the Colored Light Quality setting changes these (64x32x64 / 96x48x96 / 128x64x128).
+	private int sizeX = 64;
+	private int sizeY = 32;
+	private int sizeZ = 64;
+	private int halfX = this.sizeX / 2;
+	private int halfY = this.sizeY / 2;
+	private int halfZ = this.sizeZ / 2;
 	private static final int REFRESH_FRAMES = 40;
 	private static final int MAX_SOURCES = 512;
 	private static final int SOURCE_FLOATS = 8;
@@ -199,6 +199,30 @@ public final class ColoredLightsService implements ColoredLights {
 	}
 
 	@Override
+	public void setVolumeSize(final int x, final int y, final int z) {
+		int nx = Math.clamp((x + 7) & ~7, 32, 192);
+		int ny = Math.clamp((y + 7) & ~7, 16, 128);
+		int nz = Math.clamp((z + 7) & ~7, 32, 192);
+		if (nx == this.sizeX && ny == this.sizeY && nz == this.sizeZ) {
+			return;
+		}
+		this.sizeX = nx;
+		this.sizeY = ny;
+		this.sizeZ = nz;
+		this.halfX = nx / 2;
+		this.halfY = ny / 2;
+		this.halfZ = nz / 2;
+		this.originX = 0;
+		this.originY = 0;
+		this.originZ = 0;
+		this.volumeDirty = true;
+		if (this.device != null) {
+			releaseGpu(true);
+			attach(this.device);
+		}
+	}
+
+	@Override
 	public boolean available() {
 		return this.featureEnabled && this.gpuReady && this.finalTexture != 0L;
 	}
@@ -261,9 +285,9 @@ public final class ColoredLightsService implements ColoredLights {
 		int snappedX = Math.floorDiv(cameraX, 8) * 8;
 		int snappedY = Math.floorDiv(cameraY, 8) * 8;
 		int snappedZ = Math.floorDiv(cameraZ, 8) * 8;
-		int newOriginX = snappedX - HALF_X;
-		int newOriginY = snappedY - HALF_Y;
-		int newOriginZ = snappedZ - HALF_Z;
+		int newOriginX = snappedX - this.halfX;
+		int newOriginY = snappedY - this.halfY;
+		int newOriginZ = snappedZ - this.halfZ;
 		boolean originChanged = newOriginX != this.originX || newOriginY != this.originY || newOriginZ != this.originZ;
 		if (originChanged) {
 			this.originX = newOriginX;
@@ -288,9 +312,9 @@ public final class ColoredLightsService implements ColoredLights {
 		this.frameParams[1] = oy;
 		this.frameParams[2] = oz;
 		this.frameParams[3] = this.finalTexture != 0L ? 1.0F : 0.0F;
-		this.frameParams[4] = 1.0F / SIZE_X;
-		this.frameParams[5] = 1.0F / SIZE_Y;
-		this.frameParams[6] = 1.0F / SIZE_Z;
+		this.frameParams[4] = 1.0F / this.sizeX;
+		this.frameParams[5] = 1.0F / this.sizeY;
+		this.frameParams[6] = 1.0F / this.sizeZ;
 		this.frameParams[7] = this.strength;
 		this.frameParams[8] = 1.0F;
 		this.frameParams[9] = 0.0F;
@@ -303,9 +327,9 @@ public final class ColoredLightsService implements ColoredLights {
 		this.frameParams[1] = oy;
 		this.frameParams[2] = oz;
 		this.frameParams[3] = on ? 1.0F : 0.0F;
-		this.frameParams[4] = 1.0F / SIZE_X;
-		this.frameParams[5] = 1.0F / SIZE_Y;
-		this.frameParams[6] = 1.0F / SIZE_Z;
+		this.frameParams[4] = 1.0F / this.sizeX;
+		this.frameParams[5] = 1.0F / this.sizeY;
+		this.frameParams[6] = 1.0F / this.sizeZ;
 		this.frameParams[7] = this.strength;
 	}
 
@@ -313,9 +337,9 @@ public final class ColoredLightsService implements ColoredLights {
 		this.volumeDirty = true;
 		int count = 0;
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-		for (int x = 0; x < SIZE_X; x++) {
-			for (int y = 0; y < SIZE_Y; y++) {
-				for (int z = 0; z < SIZE_Z; z++) {
+		for (int x = 0; x < this.sizeX; x++) {
+			for (int y = 0; y < this.sizeY; y++) {
+				for (int z = 0; z < this.sizeZ; z++) {
 					pos.set(this.originX + x, this.originY + y, this.originZ + z);
 					BlockState state = level.getBlockState(pos);
 					int emission = state.getLightEmission();
@@ -406,7 +430,7 @@ public final class ColoredLightsService implements ColoredLights {
 		float x = (float)position.x - this.originX;
 		float y = (float)position.y - this.originY;
 		float z = (float)position.z - this.originZ;
-		if (x < 0.0F || y < 0.0F || z < 0.0F || x >= SIZE_X || y >= SIZE_Y || z >= SIZE_Z) {
+		if (x < 0.0F || y < 0.0F || z < 0.0F || x >= this.sizeX || y >= this.sizeY || z >= this.sizeZ) {
 			return index;
 		}
 		writeSource(index, x, y, z, strength, color);
@@ -436,8 +460,8 @@ public final class ColoredLightsService implements ColoredLights {
 		return addPositionSource(index, position, strength, rule.color);
 	}
 
-	private static int index(final int x, final int y, final int z) {
-		return (y * SIZE_Z + z) * SIZE_X + x;
+	private int index(final int x, final int y, final int z) {
+		return (y * this.sizeZ + z) * this.sizeX + x;
 	}
 
 	private void writeMaterial(final int index, final float r, final float g, final float b, final float transmission) {
@@ -514,18 +538,20 @@ public final class ColoredLightsService implements ColoredLights {
 	}
 
 	private void attach(final MetalDevice current) {
-		detach();
+		if (this.device != null) {
+			releaseGpu(true);
+		}
 		this.device = current;
 		long ctx = current.context();
-		this.sourceTexture = MetalNative.texture3DCreate(ctx, FORMAT, SIZE_X, SIZE_Y, SIZE_Z, 1, 0);
-		this.pingTexture = MetalNative.texture3DCreate(ctx, FORMAT, SIZE_X, SIZE_Y, SIZE_Z, 1, 0);
-		this.pongTexture = MetalNative.texture3DCreate(ctx, FORMAT, SIZE_X, SIZE_Y, SIZE_Z, 1, 0);
+		this.sourceTexture = MetalNative.texture3DCreate(ctx, FORMAT, this.sizeX, this.sizeY, this.sizeZ, 1, 0);
+		this.pingTexture = MetalNative.texture3DCreate(ctx, FORMAT, this.sizeX, this.sizeY, this.sizeZ, 1, 0);
+		this.pongTexture = MetalNative.texture3DCreate(ctx, FORMAT, this.sizeX, this.sizeY, this.sizeZ, 1, 0);
 		this.sampler = MetalNative.samplerCreate(ctx, 1, 1, 1, 1, 0, 0.0F, 1);
 		this.sourceCapacity = MAX_SOURCES * SOURCE_FLOATS;
 		this.sourceBuffer = MetalNative.bufferCreate(ctx, (long)this.sourceCapacity * Float.BYTES, false);
 		this.sourceContents = MetalNative.bufferContents(this.sourceBuffer);
-		this.materialTexture = MetalNative.texture3DCreate(ctx, FORMAT, SIZE_X, SIZE_Y, SIZE_Z, 1, 0);
-		long materialBytes = (long)SIZE_X * SIZE_Y * SIZE_Z * 4L * Float.BYTES;
+		this.materialTexture = MetalNative.texture3DCreate(ctx, FORMAT, this.sizeX, this.sizeY, this.sizeZ, 1, 0);
+		long materialBytes = (long)this.sizeX * this.sizeY * this.sizeZ * 4L * Float.BYTES;
 		this.materialBuffer = MetalNative.bufferCreate(ctx, materialBytes, false);
 		this.materialContents = MetalNative.bufferContents(this.materialBuffer);
 		this.library = MetalNative.libraryCreate(ctx, KERNEL_SOURCE);
@@ -546,19 +572,26 @@ public final class ColoredLightsService implements ColoredLights {
 	}
 
 	private void detach() {
+		releaseGpu(false);
+		this.device = null;
+	}
+
+	private void releaseGpu(final boolean deferred) {
+		long oldSource = this.sourceTexture;
+		long oldPing = this.pingTexture;
+		long oldPong = this.pongTexture;
+		long oldMaterialTexture = this.materialTexture;
+		long oldMaterialBuffer = this.materialBuffer;
+		long oldSampler = this.sampler;
+		long oldSourceBuffer = this.sourceBuffer;
+		long oldLibrary = this.library;
+		long oldClear = this.clearPipeline;
+		long oldSplat = this.splatPipeline;
+		long oldMaterial = this.materialPipeline;
+		long oldPropagate = this.propagatePipeline;
+
 		this.gpuReady = false;
 		this.finalTexture = 0L;
-		release(this.sourceTexture);
-		release(this.pingTexture);
-		release(this.pongTexture);
-		release(this.materialTexture);
-		release(this.materialBuffer);
-		release(this.sampler);
-		release(this.sourceBuffer);
-		release(this.library);
-		release(this.clearPipeline);
-		release(this.splatPipeline);
-		release(this.propagatePipeline);
 		this.sourceTexture = 0L;
 		this.pingTexture = 0L;
 		this.pongTexture = 0L;
@@ -571,7 +604,36 @@ public final class ColoredLightsService implements ColoredLights {
 		this.splatPipeline = 0L;
 		this.materialPipeline = 0L;
 		this.propagatePipeline = 0L;
-		this.device = null;
+
+		if (deferred && this.device != null) {
+			this.device.releaseAfterSubmit(() -> {
+				release(oldSource);
+				release(oldPing);
+				release(oldPong);
+				release(oldMaterialTexture);
+				release(oldMaterialBuffer);
+				release(oldSampler);
+				release(oldSourceBuffer);
+				release(oldLibrary);
+				release(oldClear);
+				release(oldSplat);
+				release(oldMaterial);
+				release(oldPropagate);
+			});
+		} else {
+			release(oldSource);
+			release(oldPing);
+			release(oldPong);
+			release(oldMaterialTexture);
+			release(oldMaterialBuffer);
+			release(oldSampler);
+			release(oldSourceBuffer);
+			release(oldLibrary);
+			release(oldClear);
+			release(oldSplat);
+			release(oldMaterial);
+			release(oldPropagate);
+		}
 	}
 
 	private static void release(final long handle) {
@@ -639,16 +701,16 @@ public final class ColoredLightsService implements ColoredLights {
 		}
 	}
 
-	private static int groupsX() {
-		return (SIZE_X + THREADS_X - 1) / THREADS_X;
+	private int groupsX() {
+		return (this.sizeX + THREADS_X - 1) / THREADS_X;
 	}
 
-	private static int groupsY() {
-		return (SIZE_Y + THREADS_Y - 1) / THREADS_Y;
+	private int groupsY() {
+		return (this.sizeY + THREADS_Y - 1) / THREADS_Y;
 	}
 
-	private static int groupsZ() {
-		return (SIZE_Z + THREADS_Z - 1) / THREADS_Z;
+	private int groupsZ() {
+		return (this.sizeZ + THREADS_Z - 1) / THREADS_Z;
 	}
 
 	private void writeSource(final int index, final float x, final float y, final float z, final float strength, final LightColor color) {
@@ -672,9 +734,9 @@ public final class ColoredLightsService implements ColoredLights {
 
 	public static void onBlockChanged(final BlockPos pos) {
 		ColoredLightsService service = INSTANCE;
-		if (pos.getX() >= service.originX && pos.getX() < service.originX + SIZE_X
-			&& pos.getY() >= service.originY && pos.getY() < service.originY + SIZE_Y
-			&& pos.getZ() >= service.originZ && pos.getZ() < service.originZ + SIZE_Z) {
+		if (pos.getX() >= service.originX && pos.getX() < service.originX + service.sizeX
+			&& pos.getY() >= service.originY && pos.getY() < service.originY + service.sizeY
+			&& pos.getZ() >= service.originZ && pos.getZ() < service.originZ + service.sizeZ) {
 			service.volumeDirty = true;
 		}
 	}

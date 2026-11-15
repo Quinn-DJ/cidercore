@@ -31,6 +31,9 @@ public interface ColoredLights {
 	/** Propagation iteration count (quality); clamped to a safe range by the core. */
 	void setIterations(int iterations);
 
+	/** Volume dimensions (quality); rounded to multiples of 8 and clamped by the core. Live resize. */
+	void setVolumeSize(int x, int y, int z);
+
 	/** True when the feature is enabled and a Metal device/volume is initialized. */
 	boolean available();
 

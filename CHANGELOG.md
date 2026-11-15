@@ -23,7 +23,8 @@
 - `ColoredLights` API v3: `registerBlock`, `registerTag`, `registerFilter`, `addEntityLightProvider`,
   `setEnabled`, `setStrength`, `setIterations`, `textureHandle`, `samplerHandle`, `prepareFrame`, `frameParams`, `sample`.
 - M2 increments: held-light sources, material/occupancy volume, stained-glass/water/ice/leaf filters, block-update
-  dirty hook, propagation quality (iteration count; volume-size presets follow), and terrain/particle/entity sampling.
+  dirty hook, propagation quality (64×32×64 / 96×48×96 / 128×64×128 volumes with 16/32/48 steps), and
+  terrain/particle/entity sampling.
 - M3 initial dynamic sources: dropped items, burning entities, and glow squid/allay/magma cube/blaze contribute
   chroma to the volume (brightness still comes from vanilla/point lights).
 - See the workspace design document `docs/colored-lighting-design.md` and the support matrix
