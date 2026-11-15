@@ -23,6 +23,6 @@
 - `ColoredLights` API v3: `registerBlock`, `registerTag`, `registerFilter`, `addEntityLightProvider`,
   `setEnabled`, `setStrength`, `setIterations`, `textureHandle`, `samplerHandle`, `prepareFrame`, `frameParams`, `sample`.
 - M2 increments: held-light sources, material/occupancy volume, stained-glass/water/ice/leaf filters, block-update
-  dirty hook, and propagation quality (iteration count; volume-size presets follow).
+  dirty hook, propagation quality (iteration count; volume-size presets follow), and terrain/particle/entity sampling.
 - See the workspace design document `docs/colored-lighting-design.md` and the support matrix
   `docs/colored-lights-sources.md`.

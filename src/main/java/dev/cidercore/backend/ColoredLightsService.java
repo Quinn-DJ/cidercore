@@ -17,6 +17,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -360,7 +362,55 @@ public final class ColoredLightsService implements ColoredLights {
 				count = addHeldSource(count, player.getOffhandItem(), player.getEyePosition().add(0.0, -0.3, 0.0));
 			}
 		}
+		if (count < MAX_SOURCES) {
+			count = addEntitySources(count, level);
+		}
 		this.sourceCount = count;
+	}
+
+	private int addEntitySources(final int start, final ClientLevel level) {
+		int count = start;
+		for (Entity entity : level.entitiesForRendering()) {
+			if (count >= MAX_SOURCES) {
+				break;
+			}
+			Vec3 pos = entity.position().add(0.0, entity.getBbHeight() * 0.5, 0.0);
+			if (entity instanceof ItemEntity itemEntity) {
+				count = addHeldSource(count, itemEntity.getItem(), pos);
+			}
+			if (count >= MAX_SOURCES) {
+				break;
+			}
+			if (entity.isOnFire()) {
+				count = addPositionSource(count, pos, 1.0F, new LightColor(1.00F, 0.55F, 0.20F));
+			}
+			if (count >= MAX_SOURCES) {
+				break;
+			}
+			String path = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getPath();
+			LightColor glow = switch (path) {
+				case "glow_squid" -> new LightColor(0.45F, 0.85F, 1.00F);
+				case "allay" -> new LightColor(0.45F, 0.75F, 1.00F);
+				case "magma_cube" -> new LightColor(1.00F, 0.45F, 0.15F);
+				case "blaze" -> new LightColor(1.00F, 0.80F, 0.35F);
+				default -> null;
+			};
+			if (glow != null) {
+				count = addPositionSource(count, pos, 0.7F, glow);
+			}
+		}
+		return count;
+	}
+
+	private int addPositionSource(final int index, final Vec3 position, final float strength, final LightColor color) {
+		float x = (float)position.x - this.originX;
+		float y = (float)position.y - this.originY;
+		float z = (float)position.z - this.originZ;
+		if (x < 0.0F || y < 0.0F || z < 0.0F || x >= SIZE_X || y >= SIZE_Y || z >= SIZE_Z) {
+			return index;
+		}
+		writeSource(index, x, y, z, strength, color);
+		return index + 1;
 	}
 
 	private int addHeldSource(final int index, final ItemStack stack, final Vec3 position) {
@@ -382,15 +432,8 @@ public final class ColoredLightsService implements ColoredLights {
 		if (rule == null) {
 			return index;
 		}
-		float x = (float)position.x - this.originX;
-		float y = (float)position.y - this.originY;
-		float z = (float)position.z - this.originZ;
-		if (x < 0.0F || y < 0.0F || z < 0.0F || x >= SIZE_X || y >= SIZE_Y || z >= SIZE_Z) {
-			return index;
-		}
 		float strength = (emission / 15.0F) * rule.strength;
-		writeSource(index, x, y, z, strength, rule.color);
-		return index + 1;
+		return addPositionSource(index, position, strength, rule.color);
 	}
 
 	private static int index(final int x, final int y, final int z) {
