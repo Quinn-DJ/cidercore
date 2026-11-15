@@ -1,20 +1,29 @@
 package dev.cidercore.backend;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.mojang.renderpearl.api.GpuFormat;
 import dev.cidercore.api.ColoredLights;
 import dev.cidercore.api.EntityLightProvider;
 import dev.cidercore.api.LightColor;
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.util.ArrayList;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
@@ -27,7 +36,10 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.lwjgl.system.MemoryUtil;
 
 /**
@@ -54,9 +66,13 @@ public final class ColoredLightsService implements ColoredLights {
 
 	private static final ColoredLightsService INSTANCE = new ColoredLightsService();
 
+	private static final Logger LOGGER = LoggerFactory.getLogger("cidercore");
 	private final Map<Block, Rule> blocks = new ConcurrentHashMap<>();
+	private final Set<Block> apiBlocks = ConcurrentHashMap.newKeySet();
 	private final List<TagRule> tags = new CopyOnWriteArrayList<>();
 	private final Map<Block, Filter> filters = new ConcurrentHashMap<>();
+	private final Set<Block> apiFilters = ConcurrentHashMap.newKeySet();
+	private boolean configLoaded;
 	private final List<EntityLightProvider> entityProviders = new CopyOnWriteArrayList<>();
 	private static final Filter LEAVES = new Filter(new LightColor(0.40F, 0.80F, 0.30F), 0.70F);
 
@@ -156,6 +172,7 @@ public final class ColoredLightsService implements ColoredLights {
 		this.defaultsRegistered = true;
 		registerDefaults();
 		registerFilterDefaults();
+		loadConfig();
 	}
 
 	private void register(final Block block, final float r, final float g, final float b, final float strength) {
@@ -165,6 +182,7 @@ public final class ColoredLightsService implements ColoredLights {
 
 	@Override
 	public void registerBlock(final Block block, final LightColor color, final float strength) {
+		this.apiBlocks.add(block);
 		this.blocks.put(block, new Rule(color, strength));
 	}
 
@@ -175,6 +193,7 @@ public final class ColoredLightsService implements ColoredLights {
 
 	@Override
 	public void registerFilter(final Block block, final LightColor tint, final float transmission) {
+		this.apiFilters.add(block);
 		this.filters.put(block, new Filter(tint, transmission));
 	}
 
@@ -535,6 +554,110 @@ public final class ColoredLightsService implements ColoredLights {
 			case "black" -> new LightColor(0.15F, 0.15F, 0.15F);
 			default -> null;
 		};
+	}
+
+	private void loadConfig() {
+		if (this.configLoaded) {
+			return;
+		}
+		this.configLoaded = true;
+		Path path = FabricLoader.getInstance().getConfigDir().resolve("ciderlight-lights.json");
+		if (!Files.isRegularFile(path)) {
+			return;
+		}
+		try {
+			JsonObject root = new Gson().fromJson(Files.readString(path), JsonObject.class);
+			if (root == null) {
+				return;
+			}
+			readConfigBlocks(root, "blocks", false);
+			readConfigBlocks(root, "tags", true);
+			readConfigFilters(root);
+			LOGGER.info("Ciderlight: loaded colored-light config {}", path);
+		} catch (RuntimeException | IOException e) {
+			LOGGER.warn("Ciderlight: could not read colored-light config {}", path, e);
+		}
+	}
+
+	private void readConfigBlocks(final JsonObject root, final String key, final boolean tag) {
+		if (!root.has(key) || !root.get(key).isJsonObject()) {
+			return;
+		}
+		for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject(key).entrySet()) {
+			Identifier id = Identifier.tryParse(entry.getKey());
+			if (id == null || !entry.getValue().isJsonObject()) {
+				continue;
+			}
+			Rule rule = readRule(entry.getValue().getAsJsonObject());
+			if (rule == null) {
+				continue;
+			}
+			if (tag) {
+				this.tags.add(new TagRule(TagKey.create(Registries.BLOCK, id), rule));
+			} else {
+				Block block = BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
+				if (block != null && !this.apiBlocks.contains(block)) {
+					this.blocks.put(block, rule);
+				}
+			}
+		}
+	}
+
+	private void readConfigFilters(final JsonObject root) {
+		if (!root.has("filters") || !root.get("filters").isJsonObject()) {
+			return;
+		}
+		for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject("filters").entrySet()) {
+			Identifier id = Identifier.tryParse(entry.getKey());
+			if (id == null || !entry.getValue().isJsonObject()) {
+				continue;
+			}
+			Block block = BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
+			if (block == null || this.apiFilters.contains(block)) {
+				continue;
+			}
+			JsonObject obj = entry.getValue().getAsJsonObject();
+			LightColor tint = readColor(obj.get("tint"));
+			float transmission = obj.has("transmission") ? obj.get("transmission").getAsFloat() : 0.75F;
+			if (tint != null) {
+				this.filters.put(block, new Filter(tint, Math.clamp(transmission, 0.0F, 1.0F)));
+			}
+		}
+	}
+
+	private static @Nullable Rule readRule(final JsonObject obj) {
+		LightColor color = readColor(obj.get("color"));
+		if (color == null) {
+			return null;
+		}
+		float strength = obj.has("strength") ? obj.get("strength").getAsFloat() : 1.0F;
+		return new Rule(color, Math.clamp(strength, 0.0F, 2.0F));
+	}
+
+	private static @Nullable LightColor readColor(final @Nullable JsonElement element) {
+		if (element == null) {
+			return null;
+		}
+		if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+			String text = element.getAsString().trim();
+			if (text.startsWith("#")) {
+				text = text.substring(1);
+			}
+			try {
+				int packed = Integer.parseInt(text, 16);
+				return new LightColor(((packed >> 16) & 0xFF) / 255.0F, ((packed >> 8) & 0xFF) / 255.0F, (packed & 0xFF) / 255.0F);
+			} catch (NumberFormatException e) {
+				return null;
+			}
+		}
+		if (element.isJsonArray()) {
+			JsonArray array = element.getAsJsonArray();
+			if (array.size() < 3) {
+				return null;
+			}
+			return new LightColor(array.get(0).getAsFloat(), array.get(1).getAsFloat(), array.get(2).getAsFloat());
+		}
+		return null;
 	}
 
 	private void attach(final MetalDevice current) {

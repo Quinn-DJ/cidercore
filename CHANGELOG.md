@@ -27,5 +27,7 @@
   terrain/particle/entity sampling.
 - M3 initial dynamic sources: dropped items, burning entities, and glow squid/allay/magma cube/blaze contribute
   chroma to the volume (brightness still comes from vanilla/point lights).
+- `config/ciderlight-lights.json` block/tag/filter overrides (loaded at world join; exact API registrations win;
+  no hot reload). Format is documented in the workspace design doc.
 - See the workspace design document `docs/colored-lighting-design.md` and the support matrix
   `docs/colored-lights-sources.md`.
