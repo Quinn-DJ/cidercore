@@ -67,6 +67,7 @@ public final class ColoredLightsService implements ColoredLights {
 	private static final ColoredLightsService INSTANCE = new ColoredLightsService();
 
 	private static final Logger LOGGER = LoggerFactory.getLogger("cidercore");
+	private static final boolean DEBUG = Boolean.getBoolean("ciderlight.coloredLightsDebug");
 	private final Map<Block, Rule> blocks = new ConcurrentHashMap<>();
 	private final Set<Block> apiBlocks = ConcurrentHashMap.newKeySet();
 	private final List<TagRule> tags = new CopyOnWriteArrayList<>();
@@ -109,6 +110,9 @@ public final class ColoredLightsService implements ColoredLights {
 	private float strength = 1.0F;
 	private int propagationSteps = 32;
 	private final float[] frameParams = new float[12];
+	private long debugStartNanos;
+	private long debugCpuNanos;
+	private int debugFrames;
 	private final MemorySegment countSegment = Arena.global().allocate(Integer.BYTES, Integer.BYTES);
 	private final MemorySegment decaySegment = Arena.global().allocate(Float.BYTES, Float.BYTES);
 	private boolean defaultsRegistered;
@@ -392,7 +396,14 @@ public final class ColoredLightsService implements ColoredLights {
 		}
 
 		if (this.volumeDirty) {
+			long start = DEBUG ? System.nanoTime() : 0L;
 			uploadAndPropagate();
+			if (DEBUG) {
+				this.debugCpuNanos += System.nanoTime() - start;
+			}
+		}
+		if (DEBUG) {
+			debugTick();
 		}
 
 		float ox = (float)this.originX - (float)cameraPos.x;
@@ -410,6 +421,24 @@ public final class ColoredLightsService implements ColoredLights {
 		this.frameParams[9] = 0.0F;
 		this.frameParams[10] = 0.0F;
 		this.frameParams[11] = 0.0F;
+	}
+
+	private void debugTick() {
+		long now = System.nanoTime();
+		if (this.debugStartNanos == 0L) {
+			this.debugStartNanos = now;
+		}
+		this.debugFrames++;
+		if (now - this.debugStartNanos < 5_000_000_000L) {
+			return;
+		}
+		double seconds = (now - this.debugStartNanos) / 1.0e9;
+		LOGGER.info("Ciderlight colored lights: volume {}x{}x{}, origin {}, {}, {}, sources {}, steps {}, propagation CPU {} ms/frame, frames {}",
+			this.sizeX, this.sizeY, this.sizeZ, this.originX, this.originY, this.originZ, this.sourceCount, this.propagationSteps,
+			String.format(java.util.Locale.ROOT, "%.2f", this.debugCpuNanos / 1.0e6 / Math.max(1, this.debugFrames)), this.debugFrames);
+		this.debugStartNanos = now;
+		this.debugCpuNanos = 0L;
+		this.debugFrames = 0;
 	}
 
 	private void setFrameParams(final float ox, final float oy, final float oz, final boolean on) {

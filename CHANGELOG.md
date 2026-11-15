@@ -30,5 +30,7 @@
   explosions.
 - `config/ciderlight-lights.json` block/tag/filter overrides (loaded at world join; exact API registrations win;
   no hot reload). Format is documented in the workspace design doc.
+- API contract in `docs/colored-lights-api.md`; `-Dciderlight.coloredLightsDebug=true` logs volume/source/steps/
+  propagation CPU statistics.
 - See the workspace design document `docs/colored-lighting-design.md` and the support matrix
   `docs/colored-lights-sources.md`.
