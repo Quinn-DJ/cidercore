@@ -752,6 +752,27 @@ EXPORT void *mc_texture_create(void *ctxPtr, int format, int width, int height, 
     }
 }
 
+// A 3D texture for the colored-light volume: compute writes it and the terrain/particle/entity shaders sample it.
+// storage: 0 private (default), 1 shared (debug readback).
+EXPORT void *mc_texture3d_create(void *ctxPtr, int format, int width, int height, int depth, int mips, int storage) {
+    @autoreleasepool {
+        MCContext *ctx = BORROW(MCContext *, ctxPtr);
+        MTLPixelFormat pf = mc_pixel_format(format);
+        if (pf == MTLPixelFormatInvalid) return NULL;
+        MTLTextureDescriptor *d = [MTLTextureDescriptor new];
+        d.textureType = MTLTextureType3D;
+        d.pixelFormat = pf;
+        d.width = (NSUInteger)width;
+        d.height = (NSUInteger)height;
+        d.depth = (NSUInteger)depth;
+        d.mipmapLevelCount = (NSUInteger)MAX(mips, 1);
+        d.storageMode = storage == 1 ? MTLStorageModeShared : MTLStorageModePrivate;
+        d.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+        id<MTLTexture> tex = [ctx.device newTextureWithDescriptor:d];
+        return tex != nil ? (void *)CFBridgingRetain(tex) : NULL;
+    }
+}
+
 EXPORT void *mc_texture_view(void *texPtr, int baseMip, int mipCount) {
     @autoreleasepool {
         id<MTLTexture> tex = BORROW(id<MTLTexture>, texPtr);
@@ -1257,6 +1278,76 @@ EXPORT void *mc_pass_begin(void *framePtr, int nColor, void **colors, const int 
 EXPORT void mc_pass_end(void *encPtr) {
     id<MTLRenderCommandEncoder> enc = (id<MTLRenderCommandEncoder>)CFBridgingRelease(encPtr);
     [enc endEncoding];
+}
+
+// ---------------------------------------------------------------------------------------------
+// Compute passes (colored-light volume)
+
+EXPORT void *mc_compute_pipeline_create(void *ctxPtr, void *libPtr, const char *entry, const char *label,
+                                        char *err, int errLen) {
+    @autoreleasepool {
+        MCContext *ctx = BORROW(MCContext *, ctxPtr);
+        id<MTLLibrary> lib = BORROW(id<MTLLibrary>, libPtr);
+        id<MTLFunction> fn = [lib newFunctionWithName:[NSString stringWithUTF8String:entry]];
+        if (fn == nil) {
+            mc_write_error(nil, @"Missing compute entry point", err, errLen);
+            return NULL;
+        }
+        NSError *error = nil;
+        id<MTLComputePipelineState> pso = [ctx.device newComputePipelineStateWithFunction:fn error:&error];
+        if (pso == nil) {
+            mc_write_error(error, @"Compute pipeline creation failed", err, errLen);
+            return NULL;
+        }
+        return (void *)CFBridgingRetain(pso);
+    }
+}
+
+EXPORT void *mc_compute_begin(void *framePtr) {
+    @autoreleasepool {
+        MCFrame *frame = BORROW(MCFrame *, framePtr);
+        mc_end_blit(frame);
+        id<MTLComputeCommandEncoder> enc = [frame.commandBuffer computeCommandEncoder];
+        if (enc == nil) return NULL;
+        enc.label = @"colored light";
+        return (void *)CFBridgingRetain(enc);
+    }
+}
+
+EXPORT void mc_compute_end(void *encPtr) {
+    id<MTLComputeCommandEncoder> enc = (id<MTLComputeCommandEncoder>)CFBridgingRelease(encPtr);
+    [enc endEncoding];
+}
+
+EXPORT void mc_compute_set_pipeline(void *encPtr, void *psoPtr) {
+    [BORROW(id<MTLComputeCommandEncoder>, encPtr) setComputePipelineState:BORROW(id<MTLComputePipelineState>, psoPtr)];
+}
+
+EXPORT void mc_compute_set_texture(void *encPtr, int index, void *texPtr) {
+    [BORROW(id<MTLComputeCommandEncoder>, encPtr) setTexture:BORROW(id<MTLTexture>, texPtr) atIndex:(NSUInteger)index];
+}
+
+EXPORT void mc_compute_set_buffer(void *encPtr, int index, void *bufPtr, int64_t offset) {
+    [BORROW(id<MTLComputeCommandEncoder>, encPtr) setBuffer:BORROW(id<MTLBuffer>, bufPtr) offset:(NSUInteger)offset
+                                                     atIndex:(NSUInteger)index];
+}
+
+EXPORT void mc_compute_set_bytes(void *encPtr, int index, const void *data, int length) {
+    [BORROW(id<MTLComputeCommandEncoder>, encPtr) setBytes:data length:(NSUInteger)length atIndex:(NSUInteger)index];
+}
+
+// Dispatches threadgroups with an explicit threads-per-threadgroup; the kernel's [[thread_position_in_grid]] is
+// still the global voxel coordinate.
+EXPORT void mc_compute_dispatch(void *encPtr, int groupsX, int groupsY, int groupsZ,
+                                int threadsX, int threadsY, int threadsZ) {
+    if (groupsX <= 0 || groupsY <= 0 || groupsZ <= 0) return;
+    MTLSize groups = MTLSizeMake((NSUInteger)groupsX, (NSUInteger)groupsY, (NSUInteger)groupsZ);
+    MTLSize threads = MTLSizeMake((NSUInteger)threadsX, (NSUInteger)threadsY, (NSUInteger)threadsZ);
+    [BORROW(id<MTLComputeCommandEncoder>, encPtr) dispatchThreadgroups:groups threadsPerThreadgroup:threads];
+}
+
+EXPORT void mc_compute_barrier(void *encPtr) {
+    [BORROW(id<MTLComputeCommandEncoder>, encPtr) memoryBarrierWithScope:MTLBarrierScopeTextures];
 }
 
 EXPORT void mc_pass_push_debug(void *encPtr, const char *label) {

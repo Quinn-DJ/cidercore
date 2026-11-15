@@ -38,4 +38,9 @@ public interface CidercoreContext {
 	default FrameStage frameStages() {
 		return CidercoreApi.frameStages();
 	}
+
+	/** The core-side colored-light service (API v3); see {@link ColoredLights}. */
+	default ColoredLights coloredLights() {
+		return CidercoreApi.coloredLights();
+	}
 }

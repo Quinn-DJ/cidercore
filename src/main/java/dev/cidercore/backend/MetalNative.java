@@ -68,8 +68,9 @@ public final class MetalNative {
 
     private static final class Handles {
         static MethodHandle release, contextCreate, contextDestroy, contextName, contextLimits, contextCompleted, contextWait;
-        static MethodHandle bufferCreate, bufferContents, setLabel, textureCreate, textureView, textureBufferView, textureBufferAlignment;
-        static MethodHandle samplerCreate, libraryCreate, pipelineCreate, depthStateCreate;
+        static MethodHandle bufferCreate, bufferContents, setLabel, textureCreate, texture3DCreate, textureView, textureBufferView, textureBufferAlignment;
+        static MethodHandle samplerCreate, libraryCreate, pipelineCreate, computePipelineCreate, depthStateCreate;
+        static MethodHandle computeBegin, computeEnd, computeSetPipeline, computeSetTexture, computeSetBuffer, computeSetBytes, computeDispatch, computeBarrier;
         static MethodHandle poolPush, poolPop, frameBegin, frameCommit, blitCopyBuffer, blitBufferToTexture, blitTextureToBuffer, blitTextureToTexture;
         static MethodHandle clearTexture, clearRegion, passBegin, passEnd, passPushDebug, passPopDebug, passSetPipeline, passSetDepthClamp, passSetScissor, passSetViewport, clearStencil;
         static MethodHandle passSetVertexBuffer, passBind, passPushConstants, passDraw, passDrawIndexed, passMultiDrawIndexed, passMultiDraw;
@@ -102,12 +103,14 @@ public final class MetalNative {
             traceInputTake = fn("mc_trace_input_take", v(ADDRESS));
             frameTiming = fn("mc_frame_timing", v(ADDRESS));
             textureCreate = fn("mc_texture_create", r(P, P, I, I, I, I, I, I));
+            texture3DCreate = fn("mc_texture3d_create", r(P, P, I, I, I, I, I, I));
             textureView = fn("mc_texture_view", r(P, P, I, I));
             textureBufferView = fn("mc_texture_buffer_view", r(P, P, JAVA_LONG, JAVA_LONG, I));
             textureBufferAlignment = fn("mc_texture_buffer_alignment", r(JAVA_LONG, P, I));
             samplerCreate = fn("mc_sampler_create", r(P, P, I, I, I, I, I, JAVA_FLOAT, I));
             libraryCreate = fn("mc_library_create", r(P, P, ADDRESS, ADDRESS, I));
             pipelineCreate = fn("mc_pipeline_create", r(P, P, P, ADDRESS, P, ADDRESS, ADDRESS, ADDRESS, ADDRESS, I));
+            computePipelineCreate = fn("mc_compute_pipeline_create", r(P, P, P, ADDRESS, ADDRESS, ADDRESS, I));
             depthStateCreate = fn("mc_depth_state_create", r(P, P, I, I));
             poolPush = fn("mc_pool_push", r(P));
             poolPop = fn("mc_pool_pop", v(P));
@@ -151,6 +154,14 @@ public final class MetalNative {
             passSetBytes = fn("mc_pass_set_bytes", v(P, I, ADDRESS, I, I), CRITICAL);
             passSetBuffer = fn("mc_pass_set_buffer", v(P, I, P, JAVA_LONG, I), CRITICAL);
             passSetTexture = fn("mc_pass_set_texture", v(P, I, P, P, I), CRITICAL);
+            computeBegin = fn("mc_compute_begin", r(P, P), CRITICAL);
+            computeEnd = fn("mc_compute_end", v(P), CRITICAL);
+            computeSetPipeline = fn("mc_compute_set_pipeline", v(P, P), CRITICAL);
+            computeSetTexture = fn("mc_compute_set_texture", v(P, I, P), CRITICAL);
+            computeSetBuffer = fn("mc_compute_set_buffer", v(P, I, P, JAVA_LONG), CRITICAL);
+            computeSetBytes = fn("mc_compute_set_bytes", v(P, I, ADDRESS, I), CRITICAL);
+            computeDispatch = fn("mc_compute_dispatch", v(P, I, I, I, I, I, I), CRITICAL);
+            computeBarrier = fn("mc_compute_barrier", v(P), CRITICAL);
             samplerCreateCompare = fn("mc_sampler_create_compare", r(P, P));
         }
     }
@@ -405,6 +416,93 @@ public final class MetalNative {
             if (HitchTrace.ENABLED) {
                 HitchTrace.texture(System.nanoTime() - start, width, height);
             }
+        }
+    }
+
+    public static long texture3DCreate(long ctx, int format, int width, int height, int depth, int mips, int storage) {
+        try {
+            return (long) Handles.texture3DCreate.invokeExact(ctx, format, width, height, depth, mips, storage);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    public static long computePipelineCreate(long ctx, long library, String entry, String label) {
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment name = arena.allocateFrom(entry);
+            MemorySegment labelSeg = arena.allocateFrom(label == null ? "" : label);
+            MemorySegment err = arena.allocate(1024);
+            long handle = (long) Handles.computePipelineCreate.invokeExact(ctx, library, name, labelSeg, err, 1024);
+            if (handle == 0L) {
+                throw new IllegalStateException(err.getString(0));
+            }
+            return handle;
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    public static long computeBegin(long frame) {
+        try {
+            return (long) Handles.computeBegin.invokeExact(frame);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    public static void computeEnd(long encoder) {
+        try {
+            Handles.computeEnd.invokeExact(encoder);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    public static void computeSetPipeline(long encoder, long pipeline) {
+        try {
+            Handles.computeSetPipeline.invokeExact(encoder, pipeline);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    public static void computeSetTexture(long encoder, int index, long texture) {
+        try {
+            Handles.computeSetTexture.invokeExact(encoder, index, texture);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    public static void computeSetBuffer(long encoder, int index, long buffer, long offset) {
+        try {
+            Handles.computeSetBuffer.invokeExact(encoder, index, buffer, offset);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    public static void computeSetBytes(long encoder, int index, MemorySegment data, int length) {
+        try {
+            Handles.computeSetBytes.invokeExact(encoder, index, data, length);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    public static void computeDispatch(long encoder, int groupsX, int groupsY, int groupsZ, int threadsX, int threadsY, int threadsZ) {
+        try {
+            Handles.computeDispatch.invokeExact(encoder, groupsX, groupsY, groupsZ, threadsX, threadsY, threadsZ);
+        } catch (Throwable t) {
+            throw rethrow(t);
+        }
+    }
+
+    public static void computeBarrier(long encoder) {
+        try {
+            Handles.computeBarrier.invokeExact(encoder);
+        } catch (Throwable t) {
+            throw rethrow(t);
         }
     }
 

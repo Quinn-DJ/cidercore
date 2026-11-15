@@ -73,6 +73,7 @@ public class MetalDevice implements GpuDeviceBackend, MetalDeviceApi {
         this.extension = FrameExtensions.create(this);
         Frames.setActive(this.extension);
         current = this;
+        ColoredLightsService.onDeviceCreated(this);
     }
 
     @Override
@@ -135,6 +136,7 @@ public class MetalDevice implements GpuDeviceBackend, MetalDeviceApi {
             }
         }
         this.extension = null;
+        ColoredLightsService.detachCurrent();
         this.depthStates.values().forEach(MetalNative::release);
         MetalNative.contextDestroy(this.context);
     }
