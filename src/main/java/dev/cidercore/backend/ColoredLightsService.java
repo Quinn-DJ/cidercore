@@ -63,11 +63,15 @@ public final class ColoredLightsService implements ColoredLights {
 	private long sampler;
 	private long sourceBuffer;
 	private long sourceContents;
+	private long materialBuffer;
+	private long materialContents;
+	private long materialTexture;
 	private int sourceCapacity;
 	private int sourceCount;
 	private long library;
 	private long clearPipeline;
 	private long splatPipeline;
+	private long materialPipeline;
 	private long propagatePipeline;
 
 	private boolean featureEnabled = true;
@@ -83,6 +87,7 @@ public final class ColoredLightsService implements ColoredLights {
 	private long finalTexture;
 	private boolean enabled;
 	private float strength = 1.0F;
+	private int propagationSteps = 32;
 	private final float[] frameParams = new float[12];
 	private final MemorySegment countSegment = Arena.global().allocate(Integer.BYTES, Integer.BYTES);
 	private final MemorySegment decaySegment = Arena.global().allocate(Float.BYTES, Float.BYTES);
@@ -146,6 +151,7 @@ public final class ColoredLightsService implements ColoredLights {
 		}
 		this.defaultsRegistered = true;
 		registerDefaults();
+		registerFilterDefaults();
 	}
 
 	private void register(final Block block, final float r, final float g, final float b, final float strength) {
@@ -181,6 +187,11 @@ public final class ColoredLightsService implements ColoredLights {
 	@Override
 	public void setStrength(final float strength) {
 		this.strength = Math.clamp(strength, 0.0F, 2.0F);
+	}
+
+	@Override
+	public void setIterations(final int iterations) {
+		this.propagationSteps = Math.clamp(iterations, 4, 64);
 	}
 
 	@Override
@@ -304,6 +315,20 @@ public final class ColoredLightsService implements ColoredLights {
 					pos.set(this.originX + x, this.originY + y, this.originZ + z);
 					BlockState state = level.getBlockState(pos);
 					int emission = state.getLightEmission();
+					Filter filter = emission > 0 ? null : this.filters.get(state.getBlock());
+					if (emission <= 0 && filter == null && !state.isSolidRender()) {
+						writeMaterial(index(x, y, z), 1.0F, 1.0F, 1.0F, 1.0F);
+						continue;
+					}
+					if (emission <= 0 && filter == null) {
+						writeMaterial(index(x, y, z), 0.0F, 0.0F, 0.0F, 0.0F);
+						continue;
+					}
+					if (filter != null) {
+						writeMaterial(index(x, y, z), filter.tint.r(), filter.tint.g(), filter.tint.b(), filter.transmission);
+					} else {
+						writeMaterial(index(x, y, z), 1.0F, 1.0F, 1.0F, 1.0F);
+					}
 					if (emission <= 0) {
 						continue;
 					}
@@ -366,6 +391,21 @@ public final class ColoredLightsService implements ColoredLights {
 		return index + 1;
 	}
 
+	private static int index(final int x, final int y, final int z) {
+		return (y * SIZE_Z + z) * SIZE_X + x;
+	}
+
+	private void writeMaterial(final int index, final float r, final float g, final float b, final float transmission) {
+		if (this.materialContents == 0L) {
+			return;
+		}
+		long offset = this.materialContents + (long)index * 4L * Float.BYTES;
+		MemoryUtil.memPutFloat(offset, r);
+		MemoryUtil.memPutFloat(offset + 4, g);
+		MemoryUtil.memPutFloat(offset + 8, b);
+		MemoryUtil.memPutFloat(offset + 12, transmission);
+	}
+
 	private @Nullable Rule ruleFor(final BlockState state) {
 		Rule exact = this.blocks.get(state.getBlock());
 		if (exact != null) {
@@ -379,6 +419,46 @@ public final class ColoredLightsService implements ColoredLights {
 		return null;
 	}
 
+	private void registerFilterDefaults() {
+		this.filters.putIfAbsent(Blocks.WATER, new Filter(new LightColor(0.25F, 0.45F, 1.00F), 0.60F));
+		this.filters.putIfAbsent(Blocks.ICE, new Filter(new LightColor(0.70F, 0.90F, 1.00F), 0.85F));
+		this.filters.putIfAbsent(Blocks.PACKED_ICE, new Filter(new LightColor(0.70F, 0.90F, 1.00F), 0.85F));
+		this.filters.putIfAbsent(Blocks.BLUE_ICE, new Filter(new LightColor(0.55F, 0.75F, 1.00F), 0.80F));
+		this.filters.putIfAbsent(Blocks.TINTED_GLASS, new Filter(new LightColor(0.25F, 0.25F, 0.30F), 0.85F));
+		for (Block block : BuiltInRegistries.BLOCK) {
+			String path = BuiltInRegistries.BLOCK.getKey(block).getPath();
+			if (path.endsWith("_stained_glass")) {
+				String color = path.substring(0, path.length() - "_stained_glass".length());
+				LightColor tint = stainedGlassColor(color);
+				if (tint != null) {
+					this.filters.putIfAbsent(block, new Filter(tint, 0.75F));
+				}
+			}
+		}
+	}
+
+	private static @Nullable LightColor stainedGlassColor(final String name) {
+		return switch (name) {
+			case "white" -> new LightColor(1.00F, 1.00F, 1.00F);
+			case "orange" -> new LightColor(1.00F, 0.60F, 0.20F);
+			case "magenta" -> new LightColor(1.00F, 0.40F, 1.00F);
+			case "light_blue" -> new LightColor(0.40F, 0.80F, 1.00F);
+			case "yellow" -> new LightColor(1.00F, 1.00F, 0.30F);
+			case "lime" -> new LightColor(0.50F, 1.00F, 0.30F);
+			case "pink" -> new LightColor(1.00F, 0.60F, 0.80F);
+			case "gray" -> new LightColor(0.40F, 0.40F, 0.40F);
+			case "light_gray" -> new LightColor(0.80F, 0.80F, 0.80F);
+			case "cyan" -> new LightColor(0.30F, 1.00F, 1.00F);
+			case "purple" -> new LightColor(0.60F, 0.30F, 1.00F);
+			case "blue" -> new LightColor(0.30F, 0.40F, 1.00F);
+			case "brown" -> new LightColor(0.60F, 0.40F, 0.20F);
+			case "green" -> new LightColor(0.30F, 0.80F, 0.30F);
+			case "red" -> new LightColor(1.00F, 0.30F, 0.30F);
+			case "black" -> new LightColor(0.15F, 0.15F, 0.15F);
+			default -> null;
+		};
+	}
+
 	private void attach(final MetalDevice current) {
 		detach();
 		this.device = current;
@@ -390,12 +470,18 @@ public final class ColoredLightsService implements ColoredLights {
 		this.sourceCapacity = MAX_SOURCES * SOURCE_FLOATS;
 		this.sourceBuffer = MetalNative.bufferCreate(ctx, (long)this.sourceCapacity * Float.BYTES, false);
 		this.sourceContents = MetalNative.bufferContents(this.sourceBuffer);
+		this.materialTexture = MetalNative.texture3DCreate(ctx, FORMAT, SIZE_X, SIZE_Y, SIZE_Z, 1, 0);
+		long materialBytes = (long)SIZE_X * SIZE_Y * SIZE_Z * 4L * Float.BYTES;
+		this.materialBuffer = MetalNative.bufferCreate(ctx, materialBytes, false);
+		this.materialContents = MetalNative.bufferContents(this.materialBuffer);
 		this.library = MetalNative.libraryCreate(ctx, KERNEL_SOURCE);
 		this.clearPipeline = MetalNative.computePipelineCreate(ctx, this.library, "clear_volume", "colored light clear");
 		this.splatPipeline = MetalNative.computePipelineCreate(ctx, this.library, "splat_sources", "colored light splat");
+		this.materialPipeline = MetalNative.computePipelineCreate(ctx, this.library, "voxelize_material", "colored light material");
 		this.propagatePipeline = MetalNative.computePipelineCreate(ctx, this.library, "propagate", "colored light propagate");
-		if (this.sourceTexture == 0L || this.pingTexture == 0L || this.pongTexture == 0L || this.sampler == 0L
-			|| this.sourceBuffer == 0L || this.clearPipeline == 0L || this.splatPipeline == 0L || this.propagatePipeline == 0L) {
+		if (this.sourceTexture == 0L || this.pingTexture == 0L || this.pongTexture == 0L || this.materialTexture == 0L
+			|| this.sampler == 0L || this.sourceBuffer == 0L || this.materialBuffer == 0L || this.clearPipeline == 0L
+			|| this.splatPipeline == 0L || this.materialPipeline == 0L || this.propagatePipeline == 0L) {
 			detach();
 			this.gpuReady = false;
 			return;
@@ -411,6 +497,8 @@ public final class ColoredLightsService implements ColoredLights {
 		release(this.sourceTexture);
 		release(this.pingTexture);
 		release(this.pongTexture);
+		release(this.materialTexture);
+		release(this.materialBuffer);
 		release(this.sampler);
 		release(this.sourceBuffer);
 		release(this.library);
@@ -420,11 +508,14 @@ public final class ColoredLightsService implements ColoredLights {
 		this.sourceTexture = 0L;
 		this.pingTexture = 0L;
 		this.pongTexture = 0L;
+		this.materialTexture = 0L;
+		this.materialBuffer = 0L;
 		this.sampler = 0L;
 		this.sourceBuffer = 0L;
 		this.library = 0L;
 		this.clearPipeline = 0L;
 		this.splatPipeline = 0L;
+		this.materialPipeline = 0L;
 		this.propagatePipeline = 0L;
 		this.device = null;
 	}
@@ -457,6 +548,12 @@ public final class ColoredLightsService implements ColoredLights {
 			}
 			MetalNative.computeBarrier(enc);
 
+			MetalNative.computeSetPipeline(enc, this.materialPipeline);
+			MetalNative.computeSetTexture(enc, 0, this.materialTexture);
+			MetalNative.computeSetBuffer(enc, 0, this.materialBuffer, 0L);
+			MetalNative.computeDispatch(enc, groupsX(), groupsY(), groupsZ(), THREADS_X, THREADS_Y, THREADS_Z);
+			MetalNative.computeBarrier(enc);
+
 			MetalNative.computeSetPipeline(enc, this.splatPipeline);
 			MetalNative.computeSetTexture(enc, 0, this.sourceTexture);
 			MetalNative.computeSetBuffer(enc, 1, this.sourceBuffer, 0L);
@@ -468,12 +565,13 @@ public final class ColoredLightsService implements ColoredLights {
 			long current = this.pingTexture;
 			long next = this.pongTexture;
 			this.decaySegment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, 0L, 0.93F);
-			for (int i = 0; i < 32; i++) {
+			for (int i = 0; i < this.propagationSteps; i++) {
 				MetalNative.computeSetPipeline(enc, this.propagatePipeline);
 				MetalNative.computeSetTexture(enc, 0, this.sourceTexture);
 				MetalNative.computeSetTexture(enc, 1, current);
 				MetalNative.computeSetTexture(enc, 2, next);
-				MetalNative.computeSetBytes(enc, 3, this.decaySegment, Float.BYTES);
+				MetalNative.computeSetTexture(enc, 3, this.materialTexture);
+				MetalNative.computeSetBytes(enc, 4, this.decaySegment, Float.BYTES);
 				MetalNative.computeDispatch(enc, groupsX(), groupsY(), groupsZ(), THREADS_X, THREADS_Y, THREADS_Z);
 				MetalNative.computeBarrier(enc);
 				long swap = current;
@@ -570,13 +668,28 @@ public final class ColoredLightsService implements ColoredLights {
 		    return dot(c, float3(0.2126, 0.7152, 0.0722));
 		}
 
+		kernel void voxelize_material(texture3d<float, access::write> dst [[texture(0)]],
+		                              const device float4 *material [[buffer(0)]],
+		                              uint3 gid [[thread_position_in_grid]]) {
+		    int w = (int)dst.get_width(), h = (int)dst.get_height(), d = (int)dst.get_depth();
+		    if (gid.x >= (uint)w || gid.y >= (uint)h || gid.z >= (uint)d) return;
+		    uint index = (gid.y * (uint)d + gid.z) * (uint)w + gid.x;
+		    dst.write(material[index], gid);
+		}
+
 		kernel void propagate(texture3d<float, access::read> source [[texture(0)]],
 		                      texture3d<float, access::read> current [[texture(1)]],
 		                      texture3d<float, access::write> next [[texture(2)]],
-		                      constant float &decay [[buffer(3)]],
+		                      texture3d<float, access::read> material [[texture(3)]],
+		                      constant float &decay [[buffer(4)]],
 		                      uint3 gid [[thread_position_in_grid]]) {
 		    int w = (int)source.get_width(), h = (int)source.get_height(), d = (int)source.get_depth();
 		    if (gid.x >= (uint)w || gid.y >= (uint)h || gid.z >= (uint)d) return;
+		    float4 own = material.read(gid);
+		    if (own.a <= 0.0) {
+		        next.write(float4(0.0), gid);
+		        return;
+		    }
 		    float4 src = source.read(gid);
 		    float4 best = src;
 		    float bestLum = luminance(src.rgb);
@@ -584,13 +697,20 @@ public final class ColoredLightsService implements ColoredLights {
 		    for (int i = 0; i < 6; i++) {
 		        int3 q = int3(gid) + offs[i];
 		        if (q.x < 0 || q.y < 0 || q.z < 0 || q.x >= w || q.y >= h || q.z >= d) continue;
+		        float4 m = material.read(uint3(q));
+		        if (m.a <= 0.0) continue;
 		        float4 c = current.read(uint3(q)) * decay;
+		        c.rgb *= m.rgb;
+		        c.a *= m.a;
 		        float lum = luminance(c.rgb);
 		        if (lum > bestLum) {
 		            bestLum = lum;
 		            best = c;
 		        }
 		    }
+		    // The filter at the destination tints the light that settles here as well.
+		    best.rgb *= own.rgb;
+		    best.a *= own.a;
 		    next.write(best, gid);
 		}
 		""";

@@ -28,6 +28,9 @@ public interface ColoredLights {
 	/** Scales the chroma blend (0..2); 1 is the tuned look. */
 	void setStrength(float strength);
 
+	/** Propagation iteration count (quality); clamped to a safe range by the core. */
+	void setIterations(int iterations);
+
 	/** True when the feature is enabled and a Metal device/volume is initialized. */
 	boolean available();
 
