@@ -24,6 +24,20 @@ public final class Benchmark {
     private static final int SETTLE_TICKS = 100;
     private static final int SCENE_X = 5000;
     private static final int SCENE_Z = 5000;
+    private static final int GALLERY_X = SCENE_X + 1000;
+    private static final int GALLERY_Y = 200;
+    private static final int GALLERY_Z = SCENE_Z;
+    private static final boolean GALLERY = Boolean.getBoolean("ciderlight.benchGallery");
+    private static int galleryCameraX() {
+        return GALLERY_X + GALLERY_SOURCES.length * 7 / 2 + 3;
+    }
+
+    private static final String[] GALLERY_SOURCES = {
+        "torch", "soul_torch", "lantern", "soul_lantern", "copper_torch", "copper_lantern",
+        "campfire[lit=true]", "soul_campfire[lit=true]", "lava", "glowstone", "sea_lantern", "shroomlight",
+        "ochre_froglight", "verdant_froglight", "pearlescent_froglight", "end_rod", "crying_obsidian",
+        "redstone_lamp[lit=true]", "redstone_torch", "copper_bulb[lit=true]"
+    };
     private static final long WARMUP_NS = 10_000_000_000L;
 
     private static int ticksInWorld;
@@ -114,6 +128,9 @@ public final class Benchmark {
             return;
         }
         ticksInWorld++;
+        if (GALLERY) {
+            galleryTick(minecraft);
+        }
         boolean sceneMode = Boolean.getBoolean("ciderlight.benchScene");
         if (sceneMode && ticksInWorld == SETTLE_TICKS / 2 && minecraft.getSingleplayerServer() != null) {
             // The scene lives at fixed far-off coordinates so runs don't build on top of each other or wherever the
@@ -420,6 +437,101 @@ public final class Benchmark {
                 minecraft.getFramerateLimitTracker().getThrottleReason(), minecraft.gui.screen()
             );
         }
+    }
+
+    /**
+     * -Dciderlight.benchGallery=true: a dark, enclosed exhibition hall with one light source per niche. The camera
+     * starts in the walkway looking at the row; the world is saved so it can be walked afterwards.
+     */
+    private static void galleryTick(final Minecraft minecraft) {
+        if (minecraft.getSingleplayerServer() == null || minecraft.player == null) {
+            return;
+        }
+        MinecraftServer server = minecraft.getSingleplayerServer();
+        if (ticksInWorld == SETTLE_TICKS / 2) {
+            server.execute(() -> {
+                var source = server.createCommandSourceStack().withSuppressedOutput();
+                server.getCommands().performPrefixedCommand(source,
+                    "tp @a " + galleryCameraX() + " " + (GALLERY_Y + 2) + " " + (GALLERY_Z - 4) + " 0 5");
+                server.getCommands().performPrefixedCommand(source, "gamemode spectator @a");
+            });
+        }
+        if (ticksInWorld == SETTLE_TICKS + 5) {
+            server.execute(() -> buildColoredGallery(server));
+        }
+        if (ticksInWorld == SETTLE_TICKS + 10) {
+            server.execute(() -> {
+                var source = server.createCommandSourceStack().withSuppressedOutput();
+                server.getCommands().performPrefixedCommand(source,
+                    "tp @a " + galleryCameraX() + " " + (GALLERY_Y + 2) + " " + (GALLERY_Z - 4) + " "
+                        + Integer.getInteger("ciderlight.benchYaw", 0) + " " + Integer.getInteger("ciderlight.benchPitch", 5));
+            });
+        }
+    }
+
+    private static void buildColoredGallery(final MinecraftServer server) {
+        int gx = GALLERY_X;
+        int gy = GALLERY_Y;
+        int gz = GALLERY_Z;
+        int n = GALLERY_SOURCES.length;
+        int width = n * 7;
+        int x0 = gx - 4;
+        int x1 = gx + width + 4;
+        var c = server.createCommandSourceStack().withSuppressedOutput();
+        String[] shell = {
+            "time set 18000", "weather clear", "gamerule doDaylightCycle false", "gamerule advance_time false",
+            "gamerule advance_weather false", "gamemode spectator @a",
+            "fill " + x0 + " " + (gy - 2) + " " + (gz - 8) + " " + x1 + " " + (gy + 8) + " " + (gz + 8) + " air",
+            "fill " + x0 + " " + (gy - 1) + " " + (gz - 8) + " " + x1 + " " + (gy - 1) + " " + (gz + 8) + " black_concrete",
+            "fill " + x0 + " " + gy + " " + (gz - 8) + " " + x1 + " " + (gy + 5) + " " + (gz - 8) + " deepslate_bricks",
+            "fill " + x0 + " " + gy + " " + (gz + 7) + " " + x1 + " " + (gy + 5) + " " + (gz + 7) + " deepslate_bricks",
+            "fill " + x0 + " " + gy + " " + (gz - 8) + " " + x0 + " " + (gy + 5) + " " + (gz + 7) + " deepslate_bricks",
+            "fill " + x1 + " " + gy + " " + (gz - 8) + " " + x1 + " " + (gy + 5) + " " + (gz + 7) + " deepslate_bricks",
+            "fill " + x0 + " " + (gy + 5) + " " + (gz - 8) + " " + x1 + " " + (gy + 5) + " " + (gz + 7) + " deepslate_tiles"
+        };
+        for (String command : shell) {
+            server.getCommands().performPrefixedCommand(c, command);
+        }
+        for (int i = 0; i < n; i++) {
+            int dx = gx + i * 7;
+            // Divider wall and the niche's dark floor accent.
+            server.getCommands().performPrefixedCommand(c, "fill " + dx + " " + gy + " " + gz + " " + dx + " " + (gy + 4) + " " + (gz + 6) + " deepslate_bricks");
+            server.getCommands().performPrefixedCommand(c, "fill " + (dx + 1) + " " + (gy - 1) + " " + gz + " " + (dx + 6) + " " + (gy - 1) + " " + (gz + 6) + " polished_blackstone");
+            int sx = dx + 3;
+            int sy = gy + 1;
+            int sz = gz + 4;
+            String source = GALLERY_SOURCES[i];
+            if (source.equals("lava")) {
+                // A one-block lava basin, rimmed in stone so it cannot flow into the walkway.
+                server.getCommands().performPrefixedCommand(c, "setblock " + (sx - 1) + " " + sy + " " + sz + " stone");
+                server.getCommands().performPrefixedCommand(c, "setblock " + (sx + 1) + " " + sy + " " + sz + " stone");
+                server.getCommands().performPrefixedCommand(c, "setblock " + sx + " " + sy + " " + (sz - 1) + " stone");
+                server.getCommands().performPrefixedCommand(c, "setblock " + sx + " " + sy + " " + (sz + 1) + " stone");
+                server.getCommands().performPrefixedCommand(c, "setblock " + sx + " " + sy + " " + sz + " lava");
+            } else {
+                server.getCommands().performPrefixedCommand(c, "setblock " + sx + " " + sy + " " + sz + " " + source);
+            }
+        }
+        // Number the niches with a small floor marker, so a source can be talked about unambiguously.
+        for (int i = 0; i < n; i++) {
+            int dx = gx + i * 7;
+            String marker = switch (i % 10) {
+                case 0 -> "white_concrete";
+                case 1 -> "orange_concrete";
+                case 2 -> "magenta_concrete";
+                case 3 -> "light_blue_concrete";
+                case 4 -> "yellow_concrete";
+                case 5 -> "lime_concrete";
+                case 6 -> "pink_concrete";
+                case 7 -> "gray_concrete";
+                case 8 -> "cyan_concrete";
+                default -> "purple_concrete";
+            };
+            server.getCommands().performPrefixedCommand(c, "setblock " + (dx + 1) + " " + (gy - 1) + " " + (gz - 1) + " " + marker);
+        }
+        server.getCommands().performPrefixedCommand(c, "tp @a " + galleryCameraX() + " " + (gy + 2) + " " + (gz - 4) + " "
+            + Integer.getInteger("ciderlight.benchYaw", 0) + " " + Integer.getInteger("ciderlight.benchPitch", 5));
+        LOGGER.info("Ciderlight bench: built colored-light gallery with {} niches", n);
     }
 
     /** A clean sprint lane under separate persistent canopies, without leftovers from other fixtures. */
