@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
@@ -55,6 +56,7 @@ public final class ColoredLightsService implements ColoredLights {
 	private final List<TagRule> tags = new CopyOnWriteArrayList<>();
 	private final Map<Block, Filter> filters = new ConcurrentHashMap<>();
 	private final List<EntityLightProvider> entityProviders = new CopyOnWriteArrayList<>();
+	private static final Filter LEAVES = new Filter(new LightColor(0.40F, 0.80F, 0.30F), 0.70F);
 
 	private @Nullable MetalDevice device;
 	private long sourceTexture;
@@ -315,7 +317,7 @@ public final class ColoredLightsService implements ColoredLights {
 					pos.set(this.originX + x, this.originY + y, this.originZ + z);
 					BlockState state = level.getBlockState(pos);
 					int emission = state.getLightEmission();
-					Filter filter = emission > 0 ? null : this.filters.get(state.getBlock());
+					Filter filter = emission > 0 ? null : filterFor(state);
 					if (emission <= 0 && filter == null && !state.isSolidRender()) {
 						writeMaterial(index(x, y, z), 1.0F, 1.0F, 1.0F, 1.0F);
 						continue;
@@ -406,6 +408,14 @@ public final class ColoredLightsService implements ColoredLights {
 		MemoryUtil.memPutFloat(offset + 12, transmission);
 	}
 
+	private @Nullable Filter filterFor(final BlockState state) {
+		Filter filter = this.filters.get(state.getBlock());
+		if (filter != null) {
+			return filter;
+		}
+		return state.is(BlockTags.LEAVES) ? LEAVES : null;
+	}
+
 	private @Nullable Rule ruleFor(final BlockState state) {
 		Rule exact = this.blocks.get(state.getBlock());
 		if (exact != null) {
@@ -427,8 +437,9 @@ public final class ColoredLightsService implements ColoredLights {
 		this.filters.putIfAbsent(Blocks.TINTED_GLASS, new Filter(new LightColor(0.25F, 0.25F, 0.30F), 0.85F));
 		for (Block block : BuiltInRegistries.BLOCK) {
 			String path = BuiltInRegistries.BLOCK.getKey(block).getPath();
-			if (path.endsWith("_stained_glass")) {
-				String color = path.substring(0, path.length() - "_stained_glass".length());
+			boolean glass = path.endsWith("_stained_glass") || path.endsWith("_stained_glass_pane");
+			if (glass) {
+				String color = path.substring(0, path.length() - (path.endsWith("_stained_glass_pane") ? "_stained_glass_pane".length() : "_stained_glass".length()));
 				LightColor tint = stainedGlassColor(color);
 				if (tint != null) {
 					this.filters.putIfAbsent(block, new Filter(tint, 0.75F));
@@ -708,9 +719,8 @@ public final class ColoredLightsService implements ColoredLights {
 		            best = c;
 		        }
 		    }
-		    // The filter at the destination tints the light that settles here as well.
-		    best.rgb *= own.rgb;
-		    best.a *= own.a;
+		    // The filter is applied when light leaves a filtered voxel into its neighbour (above). Applying it again
+		    // at the destination would compound every propagation pass and make stained glass almost opaque.
 		    next.write(best, gid);
 		}
 		""";

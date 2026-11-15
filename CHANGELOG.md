@@ -21,6 +21,8 @@
   Metal compute injection/propagation, and terrain sampling in Ciderlight. M1 covers static vanilla block
   sources and a warm fallback; filters, dynamic held/entity sources and the quality presets follow.
 - `ColoredLights` API v3: `registerBlock`, `registerTag`, `registerFilter`, `addEntityLightProvider`,
-  `setEnabled`, `setStrength`, `textureHandle`, `samplerHandle`, `prepareFrame`, `frameParams`, `sample`.
+  `setEnabled`, `setStrength`, `setIterations`, `textureHandle`, `samplerHandle`, `prepareFrame`, `frameParams`, `sample`.
+- M2 increments: held-light sources, material/occupancy volume, stained-glass/water/ice/leaf filters, block-update
+  dirty hook, and propagation quality (iteration count; volume-size presets follow).
 - See the workspace design document `docs/colored-lighting-design.md` and the support matrix
   `docs/colored-lights-sources.md`.
