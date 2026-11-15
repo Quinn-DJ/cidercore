@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 /** The versioning contract modules check at runtime: API version and the v2 capability bits. */
 class CidercoreApiTest {
     @Test
-    void apiVersionIsTwo() {
-        assertEquals(2, CidercoreApi.API_VERSION, "API v2 is the render-extension surface");
+    void apiVersionIsThree() {
+        assertEquals(3, CidercoreApi.API_VERSION, "API v3 adds the colored-light surface");
     }
 
     @Test
@@ -21,16 +21,17 @@ class CidercoreApiTest {
         assertTrue(CidercoreApi.supports(CidercoreApi.CAPABILITY_RENDER_TYPE_FACTORY));
         assertTrue(CidercoreApi.supports(CidercoreApi.CAPABILITY_FRAME_STAGES));
         assertTrue(CidercoreApi.supports(CidercoreApi.CAPABILITY_TRANSLATIONS));
+        assertTrue(CidercoreApi.supports(CidercoreApi.CAPABILITY_COLORED_LIGHTS));
         assertTrue(
             CidercoreApi.supports(
                 CidercoreApi.CAPABILITY_PIPELINE_REGISTRAR | CidercoreApi.CAPABILITY_RENDER_TYPE_FACTORY | CidercoreApi.CAPABILITY_FRAME_STAGES
-                    | CidercoreApi.CAPABILITY_TRANSLATIONS
+                    | CidercoreApi.CAPABILITY_TRANSLATIONS | CidercoreApi.CAPABILITY_COLORED_LIGHTS
             ),
             "a combined mask is supported when every bit in it is"
         );
         assertEquals(0, CidercoreApi.CAPABILITIES & ~(CidercoreApi.CAPABILITY_PIPELINE_REGISTRAR
             | CidercoreApi.CAPABILITY_RENDER_TYPE_FACTORY | CidercoreApi.CAPABILITY_FRAME_STAGES
-            | CidercoreApi.CAPABILITY_TRANSLATIONS), "no unknown capability bits");
+            | CidercoreApi.CAPABILITY_TRANSLATIONS | CidercoreApi.CAPABILITY_COLORED_LIGHTS), "no unknown capability bits");
     }
 
     @Test
@@ -40,12 +41,14 @@ class CidercoreApiTest {
     }
 
     @Test
-    void v2AccessorsAreStableSingletons() {
+    void accessorsAreStableSingletons() {
         assertNotNull(CidercoreApi.pipelines());
         assertNotNull(CidercoreApi.renderTypes());
         assertNotNull(CidercoreApi.frameStages());
+        assertNotNull(CidercoreApi.coloredLights());
         assertSame(CidercoreApi.pipelines(), CidercoreApi.pipelines());
         assertSame(CidercoreApi.renderTypes(), CidercoreApi.renderTypes());
         assertSame(CidercoreApi.frameStages(), CidercoreApi.frameStages());
+        assertSame(CidercoreApi.coloredLights(), CidercoreApi.coloredLights());
     }
 }

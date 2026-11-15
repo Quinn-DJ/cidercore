@@ -19,7 +19,8 @@
 		"OptionsMixin",
 		"VideoSettingsScreenMixin",
 		"FogRendererMixin",
-		"ClientLanguageMixin"
+		"ClientLanguageMixin",
+		"ClientLevelMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

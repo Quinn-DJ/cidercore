@@ -16,6 +16,10 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -68,7 +72,7 @@ public final class ColoredLightsService implements ColoredLights {
 
 	private boolean featureEnabled = true;
 	private boolean gpuReady;
-	private boolean volumeDirty = true;
+	private volatile boolean volumeDirty = true;
 	private int refreshTimer;
 	private int originX;
 	private int originY;
@@ -318,7 +322,48 @@ public final class ColoredLightsService implements ColoredLights {
 				}
 			}
 		}
+		// Held sources are added after the block scan; the existing held-light brightness uses the same items, and
+		// the volume contributes their color to the surrounding surfaces.
+		for (Player player : level.players()) {
+			if (count >= MAX_SOURCES) {
+				break;
+			}
+			count = addHeldSource(count, player.getMainHandItem(), player.getEyePosition().add(0.0, -0.3, 0.0));
+			if (count < MAX_SOURCES) {
+				count = addHeldSource(count, player.getOffhandItem(), player.getEyePosition().add(0.0, -0.3, 0.0));
+			}
+		}
 		this.sourceCount = count;
+	}
+
+	private int addHeldSource(final int index, final ItemStack stack, final Vec3 position) {
+		if (stack.isEmpty()) {
+			return index;
+		}
+		int emission = 0;
+		Block block = null;
+		if (stack.getItem() instanceof BlockItem blockItem) {
+			block = blockItem.getBlock();
+			emission = block.defaultBlockState().getLightEmission();
+		} else if (stack.is(Items.LAVA_BUCKET)) {
+			emission = 15;
+		}
+		if (emission <= 0) {
+			return index;
+		}
+		Rule rule = block != null ? ruleFor(block.defaultBlockState()) : this.blocks.get(Blocks.LAVA);
+		if (rule == null) {
+			return index;
+		}
+		float x = (float)position.x - this.originX;
+		float y = (float)position.y - this.originY;
+		float z = (float)position.z - this.originZ;
+		if (x < 0.0F || y < 0.0F || z < 0.0F || x >= SIZE_X || y >= SIZE_Y || z >= SIZE_Z) {
+			return index;
+		}
+		float strength = (emission / 15.0F) * rule.strength;
+		writeSource(index, x, y, z, strength, rule.color);
+		return index + 1;
 	}
 
 	private @Nullable Rule ruleFor(final BlockState state) {
@@ -471,6 +516,15 @@ public final class ColoredLightsService implements ColoredLights {
 
 	public static void onDeviceCreated(final MetalDevice device) {
 		INSTANCE.attach(device);
+	}
+
+	public static void onBlockChanged(final BlockPos pos) {
+		ColoredLightsService service = INSTANCE;
+		if (pos.getX() >= service.originX && pos.getX() < service.originX + SIZE_X
+			&& pos.getY() >= service.originY && pos.getY() < service.originY + SIZE_Y
+			&& pos.getZ() >= service.originZ && pos.getZ() < service.originZ + SIZE_Z) {
+			service.volumeDirty = true;
+		}
 	}
 
 	public static void detachCurrent() {
