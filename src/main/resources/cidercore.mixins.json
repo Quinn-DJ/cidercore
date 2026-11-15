@@ -18,7 +18,8 @@
 		"MinecraftMixin",
 		"OptionsMixin",
 		"VideoSettingsScreenMixin",
-		"FogRendererMixin"
+		"FogRendererMixin",
+		"ClientLanguageMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

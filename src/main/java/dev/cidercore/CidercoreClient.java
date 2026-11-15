@@ -1,6 +1,7 @@
 package dev.cidercore;
 
 import dev.cidercore.api.CidercoreApi;
+import dev.cidercore.api.Translations;
 import dev.cidercore.backend.CidercoreModules;
 import net.fabricmc.api.ClientModInitializer;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ public final class CidercoreClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		Translations.register(MOD_ID, CidercoreClient.class);
 		LOGGER.info("Cidercore initialised (API version {})", CidercoreApi.API_VERSION);
 		CidercoreModules.initialise();
 	}

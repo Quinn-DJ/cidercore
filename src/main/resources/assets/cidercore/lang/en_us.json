@@ -1,0 +1,7 @@
+{
+  "cidercore.settings.title": "Cidercore Settings",
+  "cidercore.settings.button": "Cidercore...",
+  "cidercore.settings.button.tooltip": "Core settings shared by the Cider mod family (vanilla fog toggle).",
+  "cidercore.option.disable_vanilla_fog": "Disable Vanilla Fog",
+  "cidercore.option.disable_vanilla_fog.tooltip": "Removes vanilla environmental and render-distance fog (the zeroed fog buffer vanilla uses for unfogged passes). Applies immediately; saved in config/cidercore.properties."
+}

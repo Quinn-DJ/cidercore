@@ -16,18 +16,21 @@ class CidercoreApiTest {
     }
 
     @Test
-    void advertisesEveryV2Capability() {
+    void advertisesEveryCapability() {
         assertTrue(CidercoreApi.supports(CidercoreApi.CAPABILITY_PIPELINE_REGISTRAR));
         assertTrue(CidercoreApi.supports(CidercoreApi.CAPABILITY_RENDER_TYPE_FACTORY));
         assertTrue(CidercoreApi.supports(CidercoreApi.CAPABILITY_FRAME_STAGES));
+        assertTrue(CidercoreApi.supports(CidercoreApi.CAPABILITY_TRANSLATIONS));
         assertTrue(
             CidercoreApi.supports(
                 CidercoreApi.CAPABILITY_PIPELINE_REGISTRAR | CidercoreApi.CAPABILITY_RENDER_TYPE_FACTORY | CidercoreApi.CAPABILITY_FRAME_STAGES
+                    | CidercoreApi.CAPABILITY_TRANSLATIONS
             ),
             "a combined mask is supported when every bit in it is"
         );
         assertEquals(0, CidercoreApi.CAPABILITIES & ~(CidercoreApi.CAPABILITY_PIPELINE_REGISTRAR
-            | CidercoreApi.CAPABILITY_RENDER_TYPE_FACTORY | CidercoreApi.CAPABILITY_FRAME_STAGES), "no unknown capability bits");
+            | CidercoreApi.CAPABILITY_RENDER_TYPE_FACTORY | CidercoreApi.CAPABILITY_FRAME_STAGES
+            | CidercoreApi.CAPABILITY_TRANSLATIONS), "no unknown capability bits");
     }
 
     @Test

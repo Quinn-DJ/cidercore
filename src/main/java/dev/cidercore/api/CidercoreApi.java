@@ -15,7 +15,8 @@ import dev.cidercore.backend.CidercoreRenderTypes;
  * <p>API history: v1 added the settings hub and the pipeline reload machinery; <b>v2</b> adds the render-extension
  * surface ({@link #pipelines()}, {@link #renderTypes()}, {@link #frameStages()}) that lets a module register custom
  * renderpearl pipelines with their GLSL, create custom {@code RenderType}s and hook the level frame — previously
- * possible only with private mixins/reflection. v1 methods are unchanged by v2.</p>
+ * possible only with private mixins/reflection. v1 methods are unchanged by v2. The module translation loader
+ * ({@link Translations}, guarded by {@link #CAPABILITY_TRANSLATIONS}) is additive and does not change the version.</p>
  */
 public final class CidercoreApi {
     /** Bumped on every breaking change to the surface below. */
@@ -27,9 +28,12 @@ public final class CidercoreApi {
     public static final int CAPABILITY_RENDER_TYPE_FACTORY = 1 << 1;
     /** {@link #supports(int)} bit: the level frame stages ({@link #frameStages()}). */
     public static final int CAPABILITY_FRAME_STAGES = 1 << 2;
+    /** {@link #supports(int)} bit: module lang files are merged into the game's language ({@link Translations}). */
+    public static final int CAPABILITY_TRANSLATIONS = 1 << 3;
 
     /** Every capability this core implements; see {@link #supports(int)}. */
-    public static final int CAPABILITIES = CAPABILITY_PIPELINE_REGISTRAR | CAPABILITY_RENDER_TYPE_FACTORY | CAPABILITY_FRAME_STAGES;
+    public static final int CAPABILITIES = CAPABILITY_PIPELINE_REGISTRAR | CAPABILITY_RENDER_TYPE_FACTORY | CAPABILITY_FRAME_STAGES
+        | CAPABILITY_TRANSLATIONS;
 
     private CidercoreApi() {
     }

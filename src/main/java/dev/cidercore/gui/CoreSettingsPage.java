@@ -8,10 +8,9 @@ import org.jspecify.annotations.Nullable;
 
 /** Settings-hub view of {@link CoreSettingsScreen}: adds a "Cidercore..." button to Video Settings. */
 public final class CoreSettingsPage implements SettingsPage {
-	private static final Component TITLE = Component.literal("Cidercore Settings");
-	private static final Component BUTTON = Component.literal("Cidercore...");
-	private static final Component TOOLTIP = Component.literal(
-		"Core settings shared by the Cider mod family (vanilla fog toggle).");
+	private static final Component TITLE = Component.translatable("cidercore.settings.title");
+	private static final Component BUTTON = Component.translatable("cidercore.settings.button");
+	private static final Component TOOLTIP = Component.translatable("cidercore.settings.button.tooltip");
 
 	@Override
 	public Component title() {

@@ -1,0 +1,7 @@
+{
+  "cidercore.settings.title": "Cidercore 设置",
+  "cidercore.settings.button": "Cidercore...",
+  "cidercore.settings.button.tooltip": "Cider 模组家族的通用设置（原版雾开关）。",
+  "cidercore.option.disable_vanilla_fog": "禁用原版雾",
+  "cidercore.option.disable_vanilla_fog.tooltip": "移除原版的环境雾和渲染距离雾（原版在无雾渲染通道中使用的全零雾缓冲）。立即生效；保存在 config/cidercore.properties。"
+}
