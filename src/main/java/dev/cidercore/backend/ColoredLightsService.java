@@ -262,6 +262,77 @@ public final class ColoredLightsService implements ColoredLights {
 	}
 
 	@Override
+	public int dynamicLights(final Vec3 cameraPos, final float[] out) {
+		ClientLevel level = Minecraft.getInstance().level;
+		if (level == null || out.length < 8 * 7) {
+			return 0;
+		}
+		int count = 0;
+		for (Entity entity : level.entitiesForRendering()) {
+			if (count >= 8) {
+				break;
+			}
+			if (entity instanceof Player) {
+				continue; // held lights already have their own brightness path
+			}
+			Vec3 pos = entity.position().add(0.0, entity.getBbHeight() * 0.5, 0.0);
+			LightColor color = null;
+			float intensity = 0.0F;
+			if (entity instanceof ItemEntity itemEntity) {
+				ItemStack stack = itemEntity.getItem();
+				int emission = itemEmission(stack);
+				if (emission > 0) {
+					Block block = stack.getItem() instanceof BlockItem blockItem ? blockItem.getBlock() : (stack.is(Items.LAVA_BUCKET) ? Blocks.LAVA : null);
+					Rule rule = block != null ? ruleFor(block.defaultBlockState()) : null;
+					if (rule != null) {
+						color = rule.color;
+						intensity = (emission / 15.0F) * rule.strength * 0.8F;
+					}
+				}
+			}
+			if (color == null && entity.isOnFire()) {
+				color = new LightColor(1.00F, 0.55F, 0.20F);
+				intensity = 0.8F;
+			}
+			if (color == null) {
+				color = entityGlowColor(entity);
+				intensity = 0.6F;
+			}
+			if (color == null || intensity <= 0.0F) {
+				continue;
+			}
+			int base = count * 7;
+			out[base] = (float)pos.x;
+			out[base + 1] = (float)pos.y;
+			out[base + 2] = (float)pos.z;
+			out[base + 3] = color.r();
+			out[base + 4] = color.g();
+			out[base + 5] = color.b();
+			out[base + 6] = intensity;
+			count++;
+		}
+		return count;
+	}
+
+	private static int itemEmission(final ItemStack stack) {
+		if (stack.getItem() instanceof BlockItem blockItem) {
+			return blockItem.getBlock().defaultBlockState().getLightEmission();
+		}
+		return stack.is(Items.LAVA_BUCKET) ? 15 : 0;
+	}
+
+	private static @Nullable LightColor entityGlowColor(final Entity entity) {
+		String path = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getPath();
+		return switch (path) {
+			case "glow_squid" -> new LightColor(0.45F, 0.85F, 1.00F);
+			case "allay" -> new LightColor(0.45F, 0.75F, 1.00F);
+			case "magma_cube" -> new LightColor(1.00F, 0.45F, 0.15F);
+			case "blaze" -> new LightColor(1.00F, 0.80F, 0.35F);
+			default -> null;
+		};
+	}
+
+	@Override
 	public @Nullable LightSample sample(final Vec3 worldPos) {
 		// M1 intentionally has no CPU readback. The debug path is added with the first volume readback.
 		return null;
@@ -430,14 +501,7 @@ public final class ColoredLightsService implements ColoredLights {
 			if (count >= MAX_SOURCES) {
 				break;
 			}
-			String path = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getPath();
-			LightColor glow = switch (path) {
-				case "glow_squid" -> new LightColor(0.45F, 0.85F, 1.00F);
-				case "allay" -> new LightColor(0.45F, 0.75F, 1.00F);
-				case "magma_cube" -> new LightColor(1.00F, 0.45F, 0.15F);
-				case "blaze" -> new LightColor(1.00F, 0.80F, 0.35F);
-				default -> null;
-			};
+			LightColor glow = entityGlowColor(entity);
 			if (glow != null) {
 				count = addPositionSource(count, pos, 0.7F, glow);
 			}
@@ -460,14 +524,8 @@ public final class ColoredLightsService implements ColoredLights {
 		if (stack.isEmpty()) {
 			return index;
 		}
-		int emission = 0;
-		Block block = null;
-		if (stack.getItem() instanceof BlockItem blockItem) {
-			block = blockItem.getBlock();
-			emission = block.defaultBlockState().getLightEmission();
-		} else if (stack.is(Items.LAVA_BUCKET)) {
-			emission = 15;
-		}
+		int emission = itemEmission(stack);
+		Block block = stack.getItem() instanceof BlockItem blockItem ? blockItem.getBlock() : (stack.is(Items.LAVA_BUCKET) ? Blocks.LAVA : null);
 		if (emission <= 0) {
 			return index;
 		}

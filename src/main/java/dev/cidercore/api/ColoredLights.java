@@ -52,6 +52,13 @@ public interface ColoredLights {
 	 */
 	float[] frameParams();
 
+	/**
+	 * Dynamic colored point lights near the camera, for short-range brightness that vanilla block light does not
+	 * carry (dropped items, burning/glowing entities). Each entry is seven floats: world x/y/z, rgb, intensity.
+	 * Returns the number written (at most eight); {@code out} must have room for 8 * 7 floats.
+	 */
+	int dynamicLights(Vec3 cameraPos, float[] out);
+
 	/** Debug/API query: sampled chroma at a world position, or {@code null} when outside the volume. */
 	@Nullable LightSample sample(Vec3 worldPos);
 
